@@ -119,4 +119,4 @@ VEN-chatbot/
 ## Author
 
 **Ahmad Hassan** — AI & Data Engineer
-[LinkedIn](https://linkedin.com/in/ahmad-hassan) · [Email](mailto:contactahmad.ds@gmail.com)
+[LinkedIn](https://www.linkedin.com/in/ahmadhassan08/) · [Email](mailto:contactahmad.ds@gmail.com)
