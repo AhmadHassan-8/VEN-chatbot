@@ -1,0 +1,541 @@
+{
+  "name": "VEN_Chatbot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "047aea7b-6b1e-4a8b-ad75-af8e8eccaa4c",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        -64
+      ],
+      "id": "89bb4457-20df-49ff-a2bc-e400367c22fb",
+      "name": "Webhook",
+      "webhookId": "047aea7b-6b1e-4a8b-ad75-af8e8eccaa4c"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"response\": \"{{ $json.output.replace(/\\n/g, '\\\\n') }}\"\n}\n\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2432,
+        -96
+      ],
+      "id": "459b45a1-3e62-48bf-a33d-b886534b5a15",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "value",
+        "key": "={{ $json.body.session_id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        256,
+        -80
+      ],
+      "id": "64d88619-606b-44ea-bc40-fd8608bab180",
+      "name": "Redis",
+      "credentials": {
+        "redis": {
+          "id": "9hLOAdvynYfS1HP7",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cb427725-3d3a-49ed-b36a-630cfb1b447b",
+              "leftValue": "={{ $json.value }}",
+              "rightValue": "null",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        -80
+      ],
+      "id": "212c2f11-6ea4-4931-920a-e564db872e39",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=message: {{ $json.message }}\nvalue: {{ $json.value }}\nbuilding_id: {{ $json.building_id }}\nuser_id: {{ $json.user_id }}\nsession_id: {{ $json.session_id }}",
+        "options": {
+          "systemMessage": "prompt \n\n\nYou are a smart AI assistant for residents of an apartment building.\n\nYou receive these inputs:\n- session_id\n- user_id\n- message\n- building_id\n- value (this is the saved session data from Redis; it may be null if no session exists)\nimportant: you must need to call start_session if value is null and also send session_id, user_id, and building_id and the response generated to this tool\nYour responsibilities:\n1. If `value` is null:\n   \n   - Then generate a natural response to the user's message.\n- Internally call the `start_session` tool using session_id, user_id, and building_id and the response generated and automatically define the value for starting the session make sure the new session is stored on key session id and has other information as a value with your response saved in it so that when next calling the old session it should have to previous context.\n   - Do **not** mention anything about a session being started.\n\n2. If `value` contains session context:\n   - Use this context to personalize your response.\n   - For example, if it includes a previous topic, refer to it naturally in conversation if relevant.\n\n3. If the message is about apartment-related queries (electricity, water, maintenance, services, etc.):\n   - Internally call the `rag_search` tool using the message and building_id.\n   - Return the result to the user.\n\n4. If the message is a greeting, thanks, or casual chat:\n   - Respond with a friendly and helpful message.\n\n5. If the message is unclear, irrelevant, or non-English:\n   - Politely decline and ask the user to rephrase their query about the building or services.\n\n🚫 Never include:\n- Any tool names (e.g., \"rag_search\", \"start_session\", etc.)\n- Any JSON, markdown, or technical formatting\n- Any explanation of internal processes\n\n✅ Only return:\n- A plain, natural response for the user.\n\nExamples:\n- Valid: \"Water supply is currently running smoothly in all apartments.\"\n- Invalid: `{\"tool\":\"rag_search\",...}` or any structured format\n\nNow read the input and give a clear, natural reply based on the message and session.\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        1632,
+        -96
+      ],
+      "id": "8144abfd-3f3a-4f54-b48b-8ef21f72a5c7",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        624,
+        -256
+      ],
+      "id": "34a92156-5059-4dfd-bc48-c6fe7bf82900",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const merged = items[0].json;\n\nreturn [\n  {\n    json: {\n      user_id: merged.body?.user_id,\n      session_id: merged.body?.session_id,\n      message: merged.body?.message,\n      building_id: merged.body?.building_id,\n      value: merged.value ?? null // from Redis\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        -256
+      ],
+      "id": "25e16a53-b976-4503-9b8f-2ea12bb2cae8",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-flash-1.5",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1504,
+        80
+      ],
+      "id": "f45baaed-d7d8-460f-81fa-4f19f27b1583",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "8sZG3lcwj2exYlzj",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        240
+      ],
+      "id": "4af62d4b-27cb-49c4-9e1c-fc5aef815f4d",
+      "name": "Embeddings Google Gemini",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "NzxMQIpAJO7Xd8mS",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ $('Code').item.json.session_id }}",
+        "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Value', ``, 'string') }}",
+        "expire": true,
+        "ttl": 3600
+      },
+      "type": "n8n-nodes-base.redisTool",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        64
+      ],
+      "id": "2a679d2f-4c06-4a1b-a619-279a0eb76213",
+      "name": "start_session",
+      "credentials": {
+        "redis": {
+          "id": "9hLOAdvynYfS1HP7",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search the demovenchat knowledge base to find relevant, building-specific information about electricity, water, apartment services, maintenance schedules, or general residential queries.\n\nUses semantic search powered by Gemini embeddings and Pinecone vector DB to retrieve the most contextually accurate answers from structured Google Sheet data.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "demovenchat",
+          "mode": "list",
+          "cachedResultName": "demovenchat"
+        },
+        "topK": 10,
+        "options": {
+          "pineconeNamespace": "ven"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        1776,
+        80
+      ],
+      "id": "78ce8e41-1bd8-41c0-9768-c67987346480",
+      "name": "rag_search",
+      "credentials": {
+        "pineconeApi": {
+          "id": "GMWPNgUUp3jOOXSJ",
+          "name": "PineconeApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        624,
+        128
+      ],
+      "id": "a698e9c5-0a4b-4d38-8d7e-9c81f27a4d1d",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const merged = items[0].json;\n\nreturn [\n  {\n    json: {\n      user_id: merged.body?.user_id,\n      session_id: merged.body?.session_id,\n      message: merged.body?.message,\n      building_id: merged.body?.building_id,\n      value: merged.value ?? null // from Redis\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        128
+      ],
+      "id": "79cf3a26-99ef-4bee-8c7e-b0d40838f6ac",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "content": "## Retrieval-Augmented Generation (RAG) in VEN Chatbot\n\nVEN leverages RAG to provide accurate, building-specific answers. For queries like maintenance, water issues, or services, it retrieves relevant info from a knowledge base using semantic similarity, then generates a personalized response. This ensures smart, real-time assistance for apartment residents.",
+        "height": 416,
+        "width": 288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        -736
+      ],
+      "id": "98f9974a-e302-4751-afca-7d84d4395819",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "##  📩 Frontend Webhook Integration \nReceives user messages and session data from the VEN chatbot frontend and triggers the n8n workflow for real-time processing.",
+        "height": 368,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        -240
+      ],
+      "id": "f8b0f06e-bfe2-453a-a0d4-4e05470bf40a",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## 📩 Webhook Response \n* Delivers only the final AI-generated message back to the user.\n* No extra data or tool-related information is included.",
+        "height": 368,
+        "width": 320
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2320,
+        -256
+      ],
+      "id": "87d40565-fb82-4713-a393-4e32178c8848",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## 🤖 AI Agent Decision Block\nThis block powers the core intelligence of the VEN chatbot.\n\n* The AI Agent decides whether to call a knowledge search for apartment-related queries or respond casually to greetings or general messages.\n\n* If the session is new, it creates one and stores context in Redis.\n\n* All interactions and responses are logged for future reference.",
+        "height": 848,
+        "width": 816,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        -464
+      ],
+      "id": "0da3395e-a0d4-48cc-9143-837a6433f181",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Session Handling & Input Preparation\nThis section checks if the user has an existing session in Redis. If not, it's treated as a new session. The Merge node combines frontend input with session data (if available), and the Code node filters and formats the message, session ID, user ID, building ID, and session data to prepare clean input for the AI Agent.",
+        "height": 704,
+        "width": 1136,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        176,
+        -400
+      ],
+      "id": "94f29905-55e2-4d98-b8ba-35d49ca2a71b",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryMongoDbChat",
+      "typeVersion": 1,
+      "position": [
+        1648,
+        80
+      ],
+      "id": "7d8f2541-2998-48a2-abb1-0464df835851",
+      "name": "MongoDB Chat Memory",
+      "credentials": {
+        "mongoDb": {
+          "id": "lmaa5cChDnCx6fkd",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "\nThis chatbot uses a Pinecone vector store that’s updated hourly from a Google Sheet in a separate workflow. Only updated data is re-indexed to keep things efficient.",
+        "height": 128,
+        "width": 224,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1952,
+        224
+      ],
+      "id": "785c44ee-b4c7-43bf-a246-74d3675f6b16",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Redis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "rag_search",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "start_session": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "rag_search": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "662b8408-794c-48a8-8fe9-440130f18bce",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "53384da7d0e54333aee57e8645a436dd57da8a3f285afee87f4b1047d394f2f8"
+  },
+  "id": "SU6eVIPOlwp8hdWi",
+  "tags": []
+}
